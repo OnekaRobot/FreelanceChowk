@@ -1,6 +1,5 @@
 const express = require("express");
 const app = express();
-
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const cookie = require("cookie-parser");
@@ -9,6 +8,7 @@ const userModel = require("./models/user");
 const freelancerModel = require("./models/freelancer");
 const clientModel = require("./models/client");
 const isLoggedIn = require("./Middlewares/isLoggedIn");
+const stripe = require("stripe")('your-secret-key');  // Replace with your actual Stripe secret key
 
 app.set("view engine", "ejs");
 app.use(express.json());
@@ -71,7 +71,6 @@ app.post("/create", async (req, res) => {
 });
 
 app.get("/create/FreelancerDetails", isLoggedIn, (req, res) => {
-    // res.send("Working on Freelancer Details");
     res.render("FL Details");
 });
 
@@ -92,11 +91,37 @@ app.post("/logout", async (req, res) => {
     res.redirect("/");
 });
 
-// Middlewares
+// Create escrow payment route
+app.post('/api/payments/create-escrow-payment', async (req, res) => {
+    const { amount, currency, buyerEmail } = req.body;
 
+    try {
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: amount * 100, // amount in cents
+            currency: currency,
+            receipt_email: buyerEmail,
+            description: "Escrow Payment",
+        });
+        res.json({ clientSecret: paymentIntent.client_secret });
+    } catch (error) {
+        res.status(500).send(error.message);
+    }
+});
 
+// Release payment route
+app.post('/api/payments/release-escrow-payment', async (req, res) => {
+    const { paymentIntentId } = req.body;
+
+    try {
+        const paymentIntent = await stripe.paymentIntents.capture(paymentIntentId);
+        res.json(paymentIntent);
+    } catch (error) {
+        res.status(500).send(error.message);
+    }
+});
 
 app.listen(3000, () => {
     console.log("Server is running on port 3000");
     console.log("http://localhost:3000/");
 });
+
